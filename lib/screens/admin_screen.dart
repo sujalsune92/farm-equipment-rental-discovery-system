@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/auth_provider.dart';
 import '../models/models.dart';
-import '../services/services.dart';
 import '../utils/app_theme.dart';
 import '../widgets/widgets.dart';
 
@@ -90,7 +89,7 @@ class _OverviewTabState extends State<_OverviewTab> {
   }
 
   Widget _sc(String l, int v, IconData i, Color c) => Card(child: ListTile(
-    leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: c.withOpacity(0.12), borderRadius: BorderRadius.circular(10)), child: Icon(i, color: c)),
+    leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)), child: Icon(i, color: c)),
     title: Text(l),
     trailing: Text('$v', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: c)),
   ));
@@ -124,8 +123,8 @@ class _UsersTabState extends State<_UsersTab> {
         return ListTile(
           leading: CircleAvatar(
             backgroundColor: u.role == AppConstants.roleAdmin
-                ? AppColors.accent.withOpacity(0.15)
-                : AppColors.primary.withOpacity(0.12),
+                ? AppColors.accent.withValues(alpha: 0.15)
+                : AppColors.primary.withValues(alpha: 0.12),
             child: Text(u.name.isNotEmpty ? u.name[0].toUpperCase() : 'U',
               style: TextStyle(color: u.role == AppConstants.roleAdmin ? AppColors.accent : AppColors.primary, fontWeight: FontWeight.w700)),
           ),
@@ -163,13 +162,13 @@ class _ListingsTabState extends State<_ListingsTab> {
         final l = _listings[i];
         return ListTile(
           leading: Container(width:48,height:48,
-            decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
             child: l.imageUrls.isNotEmpty
               ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(l.imageUrls.first, fit: BoxFit.cover))
               : const Icon(Icons.agriculture, color: AppColors.primary)),
           title: Text(l.name),
           subtitle: Text('${l.type} · ₹${l.pricePerDay.toInt()}/day · ${l.ownerName}'),
-          trailing: Switch(value: l.isActive, activeColor: AppColors.primary, onChanged: (v) async {
+          trailing: Switch(value: l.isActive, activeThumbColor: AppColors.primary, onChanged: (v) async {
             await _sb.from('listings').update({'is_active': v}).eq('id', l.id);
             _load();
           }),

@@ -54,7 +54,7 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 24),
-                Center(child: const AppLogo()),
+                const Center(child: AppLogo()),
                 const SizedBox(height: 40),
                 Text('Welcome Back',
                     style: Theme.of(context).textTheme.displayMedium),
@@ -112,10 +112,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.08),
+                      color: AppColors.error.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: AppColors.error.withOpacity(0.3)),
+                          color: AppColors.error.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
@@ -197,6 +197,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       email: _emailCtrl.text,
       password: _passCtrl.text,
       phone: _phoneCtrl.text,
+      role: AppConstants.roleFarmer,
     );
     if (!mounted) return;
     if (ok) {
@@ -218,16 +219,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 12),
-                Center(child: const AppLogo(size: 48)),
+                const Center(child: AppLogo(size: 48)),
                 const SizedBox(height: 28),
                 Text('Create Account',
                     style: Theme.of(context).textTheme.displayMedium),
                 const SizedBox(height: 4),
-                Text('Join thousands of farmers & owners',
+                Text('Join as Farmer',
                     style: Theme.of(context).textTheme.bodyMedium),
                 const SizedBox(height: 28),
 
-                // Role selector
                 TextFormField(
                   controller: _nameCtrl,
                   decoration: const InputDecoration(
@@ -283,7 +283,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.08),
+                      color: AppColors.error.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(auth.errorMessage!,

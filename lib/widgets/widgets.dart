@@ -3,7 +3,6 @@ import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import '../models/models.dart';
 import '../utils/app_theme.dart';
 
-// ─── Primary Button ────────────────────────────────────────────────────────
 class PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
@@ -47,7 +46,6 @@ class PrimaryButton extends StatelessWidget {
   }
 }
 
-// ─── Status Badge ──────────────────────────────────────────────────────────
 class StatusBadge extends StatelessWidget {
   final String status;
   const StatusBadge(this.status, {super.key});
@@ -70,9 +68,9 @@ class StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: _color.withOpacity(0.12),
+        color: _color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _color.withOpacity(0.4)),
+        border: Border.all(color: _color.withValues(alpha: 0.4)),
       ),
       child: Text(
         status,
@@ -83,7 +81,6 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
-// ─── Equipment Card ────────────────────────────────────────────────────────
 class EquipmentCard extends StatelessWidget {
   final EquipmentListing listing;
   final VoidCallback onTap;
@@ -131,7 +128,7 @@ class EquipmentCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
+                          color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(listing.type,
@@ -173,7 +170,7 @@ class EquipmentCard extends StatelessWidget {
                         itemSize: 14,
                       ),
                       const SizedBox(width: 4),
-                      Text('${listing.averageRating.toStringAsFixed(1)}',
+                      Text(listing.averageRating.toStringAsFixed(1),
                           style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary,
@@ -211,7 +208,6 @@ class EquipmentCard extends StatelessWidget {
   }
 }
 
-// ─── Booking Card ──────────────────────────────────────────────────────────
 class BookingCard extends StatelessWidget {
   final BookingModel booking;
   final VoidCallback onTap;
@@ -235,11 +231,21 @@ class BookingCard extends StatelessWidget {
                     width: 48,
                     height: 48,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.12),
+                      color: AppColors.primary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: const Icon(Icons.agriculture,
-                        color: AppColors.primary, size: 26),
+                    child: booking.listingImageUrl.isNotEmpty
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.network(
+                              booking.listingImageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.agriculture,
+                                  color: AppColors.primary, size: 26),
+                            ),
+                          )
+                        : const Icon(Icons.agriculture,
+                            color: AppColors.primary, size: 26),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -295,7 +301,6 @@ class BookingCard extends StatelessWidget {
   String _fmt(DateTime d) => '${d.day}/${d.month}/${d.year}';
 }
 
-// ─── Section Header ────────────────────────────────────────────────────────
 class SectionHeader extends StatelessWidget {
   final String title;
   final String? actionLabel;
@@ -326,7 +331,6 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
-// ─── Empty State ───────────────────────────────────────────────────────────
 class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -354,7 +358,7 @@ class EmptyState extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.08),
+                color: AppColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, size: 60, color: AppColors.primary),
@@ -379,7 +383,6 @@ class EmptyState extends StatelessWidget {
   }
 }
 
-// ─── App Logo ──────────────────────────────────────────────────────────────
 class AppLogo extends StatelessWidget {
   final double size;
   final bool showText;
@@ -402,7 +405,7 @@ class AppLogo extends StatelessWidget {
             borderRadius: BorderRadius.circular(size * 0.25),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.3),
+                color: AppColors.primary.withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               )

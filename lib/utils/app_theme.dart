@@ -107,9 +107,9 @@ class AppTheme {
 }
 
 class AppConstants {
-  static const String supabaseUrl = 'https://acwhttldtzvpddyispzi.supabase.co';
+  static const String supabaseUrl = 'https://wmgltneltqedwsnygvnn.supabase.co';
   static const String supabaseAnonKey =
-      'sb_publishable_EvcykOr5Lxc_yx3WIC1Ibw_kszbe01m';
+      'sb_publishable_C5znum4591Ns4WUaildQew_ery6PQQW';
 
   // Must match the Supabase storage bucket name shown in the dashboard
   static const String equipmentBucket = 'listings';
@@ -120,11 +120,13 @@ class AppConstants {
   static const String roleUser   = 'user';       // unified renter/owner
   static const String roleFarmer = 'farmer';     // legacy value
   static const String roleOwner  = 'owner';      // legacy value
+  static const String roleWorker = 'worker';
   static const String roleAdmin  = 'admin';
 
   static const String statusPending   = 'Pending';
   static const String statusApproved  = 'Approved';
   static const String statusDeclined  = 'Declined';
+  static const String statusInUse     = 'In Use';
   static const String statusCompleted = 'Completed';
 
   static const List<String> equipmentTypes = [

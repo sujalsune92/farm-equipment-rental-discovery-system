@@ -4,9 +4,7 @@ import '../providers/auth_provider.dart';
 import '../utils/app_theme.dart';
 import '../widgets/widgets.dart';
 
-// ──────────────────────────────────────────────────────────────────────────────
-// SplashScreen
-// ──────────────────────────────────────────────────────────────────────────────
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -29,11 +27,18 @@ class _SplashScreenState extends State<SplashScreen>
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut));
     _ctrl.forward();
 
-    Future.delayed(const Duration(seconds: 2), _navigate);
+    _navigateWhenReady();
   }
 
-  void _navigate() {
+  Future<void> _navigateWhenReady() async {
     final auth = context.read<AuthProvider>();
+    try {
+      await auth.waitForBootstrap();
+    } catch (_) {
+      // Fall back to unauthenticated flow if bootstrap has unexpected errors.
+    }
+    if (!mounted) return;
+
     if (auth.isLoggedIn) {
       if (auth.isAdmin) {
         Navigator.pushReplacementNamed(context, '/admin');
@@ -66,7 +71,7 @@ class _SplashScreenState extends State<SplashScreen>
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
+                    color: Colors.white.withValues(alpha: 0.15),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.agriculture,
@@ -86,7 +91,7 @@ class _SplashScreenState extends State<SplashScreen>
                 Text(
                   AppConstants.appTagline,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.85),
+                    color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
@@ -98,7 +103,7 @@ class _SplashScreenState extends State<SplashScreen>
                   child: CircularProgressIndicator(
                     strokeWidth: 2.5,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.white.withOpacity(0.7)),
+                        Colors.white.withValues(alpha: 0.7)),
                   ),
                 ),
               ],
@@ -110,9 +115,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// OnboardingScreen
-// ──────────────────────────────────────────────────────────────────────────────
+
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
   @override
@@ -124,21 +127,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   int _page = 0;
 
   final List<_OnboardingPage> _pages = [
-    _OnboardingPage(
+    const _OnboardingPage(
       icon: Icons.search_rounded,
       color: AppColors.primary,
       title: 'Discover Equipment Near You',
       subtitle:
           'Find tractors, harvesters, sprayers and more — all available within your radius.',
     ),
-    _OnboardingPage(
+    const _OnboardingPage(
       icon: Icons.handshake_rounded,
       color: AppColors.soil,
       title: 'Simple Booking, No Middlemen',
       subtitle:
           'Request equipment directly from owners and get instant status updates.',
     ),
-    _OnboardingPage(
+    const _OnboardingPage(
       icon: Icons.star_rounded,
       color: AppColors.accent,
       title: 'Trusted Community',
@@ -248,7 +251,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             width: 140,
             height: 140,
             decoration: BoxDecoration(
-              color: page.color.withOpacity(0.12),
+              color: page.color.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
             child: Icon(page.icon, size: 72, color: page.color),

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -8,6 +10,7 @@ import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import '../providers/auth_provider.dart';
 import '../models/models.dart';
 import '../services/services.dart';
@@ -67,6 +70,8 @@ class _FarmerDiscoveryTabState extends State<FarmerDiscoveryTab> {
   double _radiusKm = 25;
   String _type = '';
   double? _maxPrice;
+  double? _minPrice;
+  bool _insuranceOnly = false;
   double _userLat = 18.5204; // Pune fallback
   double _userLng = 73.8567;
 
@@ -86,6 +91,8 @@ class _FarmerDiscoveryTabState extends State<FarmerDiscoveryTab> {
         radiusKm: _radiusKm,
         type: _type.isEmpty ? null : _type,
         maxPrice: _maxPrice,
+        minPrice: _minPrice,
+        insuranceOnly: _insuranceOnly,
       );
       if (mounted) {
         setState(() { _listings = results; _loading = false; });
@@ -115,8 +122,8 @@ class _FarmerDiscoveryTabState extends State<FarmerDiscoveryTab> {
                     children: [
                       _mapSection(),
                       if (_listings != null && _listings!.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
                           child: EmptyState(
                             icon: Icons.agriculture,
                             title: 'No Equipment Nearby',
@@ -187,8 +194,12 @@ class _FarmerDiscoveryTabState extends State<FarmerDiscoveryTab> {
         radius: _radiusKm,
         type: _type,
         maxPrice: _maxPrice,
-        onApply: (r, t, p) {
-          setState(() { _radiusKm = r; _type = t; _maxPrice = p; });
+        minPrice: _minPrice,
+        insuranceOnly: _insuranceOnly,
+        onApply: (r, t, minP, maxP, ins) {
+          setState(() {
+            _radiusKm = r; _type = t; _minPrice = minP; _maxPrice = maxP; _insuranceOnly = ins;
+          });
           _loadListings();
         },
       ),
@@ -203,14 +214,19 @@ class _FilterSheet extends StatefulWidget {
   final double radius;
   final String type;
   final double? maxPrice;
-  final Function(double, String, double) onApply;
-  const _FilterSheet({required this.radius, required this.type, this.maxPrice, required this.onApply});
+  final double? minPrice;
+  final bool insuranceOnly;
+  final Function(double, String, double?, double?, bool) onApply;
+  const _FilterSheet({required this.radius, required this.type, this.maxPrice, this.minPrice, this.insuranceOnly = false, required this.onApply});
   @override State<_FilterSheet> createState() => _FilterSheetState();
 }
 
 class _FilterSheetState extends State<_FilterSheet> {
-  late double _radius; late String _type; late double _maxPrice;
-  @override void initState() { super.initState(); _radius = widget.radius; _type = widget.type; _maxPrice = widget.maxPrice ?? 5000; }
+  late double _radius; late String _type; late double _maxPrice; late double _minPrice; late bool _insuranceOnly;
+  @override void initState() {
+    super.initState();
+    _radius = widget.radius; _type = widget.type; _maxPrice = widget.maxPrice ?? 5000; _minPrice = widget.minPrice ?? 0; _insuranceOnly = widget.insuranceOnly;
+  }
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -219,7 +235,7 @@ class _FilterSheetState extends State<_FilterSheet> {
         Row(children: [
           Text('Filter Equipment', style: Theme.of(context).textTheme.headlineMedium),
           const Spacer(),
-          TextButton(onPressed: () => setState(() { _radius = 25; _type = ''; _maxPrice = 5000; }), child: const Text('Reset')),
+          TextButton(onPressed: () => setState(() { _radius = 25; _type = ''; _maxPrice = 5000; _minPrice = 0; _insuranceOnly = false; }), child: const Text('Reset')),
         ]),
         const SizedBox(height: 16),
         Text('Search Radius: ${_radius.toInt()} km', style: Theme.of(context).textTheme.titleMedium),
@@ -241,11 +257,25 @@ class _FilterSheetState extends State<_FilterSheet> {
           )),
         ]),
         const SizedBox(height: 16),
-        Text('Max Price: ₹${_maxPrice.toInt()}/day', style: Theme.of(context).textTheme.titleMedium),
-        Slider(value: _maxPrice, min: 100, max: 10000, divisions: 99, label: '₹${_maxPrice.toInt()}',
-            activeColor: AppColors.primary, onChanged: (v) => setState(() => _maxPrice = v)),
+        Text('Price Range: ₹${_minPrice.toInt()} - ₹${_maxPrice.toInt()}/day', style: Theme.of(context).textTheme.titleMedium),
+        RangeSlider(
+          min: 0,
+          max: 20000,
+          divisions: 200,
+          labels: RangeLabels('₹${_minPrice.toInt()}', '₹${_maxPrice.toInt()}'),
+          values: RangeValues(_minPrice, _maxPrice),
+          activeColor: AppColors.primary,
+          onChanged: (range) => setState(() { _minPrice = range.start; _maxPrice = range.end; }),
+        ),
+        SwitchListTile(
+          value: _insuranceOnly,
+          onChanged: (v) => setState(() => _insuranceOnly = v),
+          title: const Text('Insurance Available'),
+          subtitle: const Text('Show listings that offer insurance or deposit'),
+          activeThumbColor: AppColors.primary,
+        ),
         const SizedBox(height: 16),
-        PrimaryButton(text: 'Apply Filters', onPressed: () { Navigator.pop(context); widget.onApply(_radius, _type, _maxPrice); }),
+        PrimaryButton(text: 'Apply Filters', onPressed: () { Navigator.pop(context); widget.onApply(_radius, _type, _minPrice, _maxPrice, _insuranceOnly); }),
       ]),
     );
   }
@@ -254,24 +284,90 @@ class _FilterSheetState extends State<_FilterSheet> {
 // ──────────────────────────────────────────────────────────────────────────────
 // EquipmentDetailScreen
 // ──────────────────────────────────────────────────────────────────────────────
-class EquipmentDetailScreen extends StatelessWidget {
+class EquipmentDetailScreen extends StatefulWidget {
   final EquipmentListing listing;
   const EquipmentDetailScreen({super.key, required this.listing});
 
   @override
+  State<EquipmentDetailScreen> createState() => _EquipmentDetailScreenState();
+}
+
+class _EquipmentDetailScreenState extends State<EquipmentDetailScreen> {
+  final PageController _pageController = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openDirections(EquipmentListing listing) async {
+    final url = 'https://www.openstreetmap.org/?mlat=${listing.latitude}&mlon=${listing.longitude}#map=16/${listing.latitude}/${listing.longitude}';
+    await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _callOwner(String phone) async {
+    if (phone.isEmpty) return;
+    await launchUrl(Uri.parse('tel:$phone'));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final listing = widget.listing;
     final reviewService = ReviewService();
+    final images = listing.imageUrls;
+
     return Scaffold(
       body: CustomScrollView(slivers: [
         SliverAppBar(
-          expandedHeight: 280, pinned: true,
+          expandedHeight: 300,
+          pinned: true,
           flexibleSpace: FlexibleSpaceBar(
-            background: listing.imageUrls.isNotEmpty
-                ? Image.network(listing.imageUrls.first, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(color: AppColors.background,
-                        child: const Icon(Icons.agriculture, size: 80, color: AppColors.primary)))
-                : Container(color: AppColors.background,
-                    child: const Icon(Icons.agriculture, size: 80, color: AppColors.primary)),
+            background: Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                PageView.builder(
+                  controller: _pageController,
+                  itemCount: images.isNotEmpty ? images.length : 1,
+                  onPageChanged: (i) => setState(() => _page = i),
+                  itemBuilder: (_, i) {
+                    if (images.isEmpty) {
+                      return Container(
+                        color: AppColors.background,
+                        child: const Icon(Icons.agriculture, size: 80, color: AppColors.primary),
+                      );
+                    }
+                    final url = images[i];
+                    return Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: AppColors.background,
+                        child: const Icon(Icons.broken_image, size: 80, color: AppColors.primary),
+                      ),
+                    );
+                  },
+                ),
+                if (images.length > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(images.length, (i) => Container(
+                        width: 8,
+                        height: 8,
+                        margin: const EdgeInsets.symmetric(horizontal: 3),
+                        decoration: BoxDecoration(
+                          color: _page == i ? Colors.white : Colors.white70,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.black12),
+                        ),
+                      )),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
         SliverToBoxAdapter(child: Padding(
@@ -282,7 +378,7 @@ class EquipmentDetailScreen extends StatelessWidget {
                 Text(listing.name, style: Theme.of(context).textTheme.headlineLarge),
                 const SizedBox(height: 4),
                 Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                     child: Text(listing.type, style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700))),
               ])),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -314,6 +410,19 @@ class EquipmentDetailScreen extends StatelessWidget {
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 14)),
               ]),
             ],
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              OutlinedButton.icon(
+                icon: const Icon(Icons.map_outlined),
+                label: const Text('Directions'),
+                onPressed: () => _openDirections(listing),
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.call_outlined),
+                label: const Text('Call Owner'),
+                onPressed: listing.ownerPhone.isNotEmpty ? () => _callOwner(listing.ownerPhone) : null,
+              ),
+            ]),
             const SizedBox(height: 20), const Divider(), const SizedBox(height: 16),
             Text('About this Equipment', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
@@ -335,15 +444,17 @@ class EquipmentDetailScreen extends StatelessWidget {
               ])),
             ]),
             const SizedBox(height: 20), const Divider(),
-            SectionHeader(title: 'Reviews'),
+            const SectionHeader(title: 'Reviews'),
             StreamBuilder<List<ReviewModel>>(
               stream: reviewService.getListingReviews(listing.id),
               builder: (_, snap) {
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-                if (snap.data!.isEmpty) return const Padding(
+                if (snap.data!.isEmpty) {
+                  return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text('No reviews yet.', style: TextStyle(color: AppColors.textSecondary)),
                 );
+                }
                 return Column(children: snap.data!.take(5).map((r) => _reviewTile(context, r)).toList());
               },
             ),
@@ -364,7 +475,7 @@ class EquipmentDetailScreen extends StatelessWidget {
   Widget _reviewTile(BuildContext context, ReviewModel r) {
     return Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
-        CircleAvatar(radius: 14, backgroundColor: AppColors.primary.withOpacity(0.1),
+        CircleAvatar(radius: 14, backgroundColor: AppColors.primary.withValues(alpha: 0.1),
             child: Text(r.farmerName.isNotEmpty ? r.farmerName[0] : 'F',
                 style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700))),
         const SizedBox(width: 8),
@@ -393,12 +504,33 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
   final _bookingService = BookingService();
   final _notifService   = NotificationService();
   final _usageCtrl      = TextEditingController();
+  final _locationService = LocationService();
+  String _durationType = 'full_day';
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+  bool _insuranceOpted = false;
+  double? _distanceKm;
+  double? _costEstimate;
   DateTime? _startDate;
   DateTime? _endDate;
   bool _loading = false;
 
   int get _days => _startDate != null && _endDate != null ? _endDate!.difference(_startDate!).inDays + 1 : 0;
-  double get _total => _days * widget.listing.pricePerDay;
+  double get _total {
+    final l = widget.listing;
+    if (_durationType == 'hourly' && _startTime != null && _endTime != null) {
+      final startDt = DateTime(2000, 1, 1, _startTime!.hour, _startTime!.minute);
+      final endDt   = DateTime(2000, 1, 1, _endTime!.hour, _endTime!.minute);
+      final hours = endDt.difference(startDt).inMinutes / 60.0;
+      final rate = l.hourlyRate ?? (l.pricePerDay / 8);
+      return hours > 0 ? hours * rate : 0;
+    }
+    if (_durationType == 'half_day') {
+      final rate = l.halfDayRate ?? (l.pricePerDay / 2);
+      return rate;
+    }
+    return _days * l.pricePerDay;
+  }
 
   Future<void> _pickDate(bool isStart) async {
     final now = DateTime.now();
@@ -411,19 +543,63 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
     setState(() { if (isStart) { _startDate = picked; if (_endDate != null && _endDate!.isBefore(picked)) _endDate = null; } else { _endDate = picked; } });
   }
 
+  Future<void> _pickTime(bool isStart) async {
+    final picked = await showTimePicker(context: context, initialTime: TimeOfDay.now());
+    if (picked == null) return;
+    setState(() {
+      if (isStart) {
+        _startTime = picked;
+        if (_endTime != null) {
+          final startDt = DateTime(2000,1,1,_startTime!.hour,_startTime!.minute);
+          final endDt   = DateTime(2000,1,1,_endTime!.hour,_endTime!.minute);
+          if (!endDt.isAfter(startDt)) _endTime = null;
+        }
+      } else {
+        _endTime = picked;
+      }
+    });
+  }
+
+  Future<void> _ensureEstimates() async {
+    if (_distanceKm == null) {
+      final pos = await _locationService.getCurrentPosition();
+      if (pos != null) {
+        final d = _haversineKm(pos.latitude, pos.longitude, widget.listing.latitude, widget.listing.longitude);
+        setState(() => _distanceKm = d);
+      }
+    }
+    _costEstimate = _total + (widget.listing.securityDepositRequired);
+  }
+
+  double _haversineKm(double lat1, double lon1, double lat2, double lon2) {
+    const R = 6371.0;
+    final dLat = (lat2 - lat1) * pi / 180;
+    final dLon = (lon2 - lon1) * pi / 180;
+    final a = sin(dLat / 2) * sin(dLat / 2) + cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * sin(dLon / 2) * sin(dLon / 2);
+    return R * 2 * atan2(sqrt(a), sqrt(1 - a));
+  }
+
   Future<void> _submit() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final auth = context.read<AuthProvider>();
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select rental dates.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Please select rental dates.')));
+      return;
+    }
+    if (_durationType == 'hourly' && (_startTime == null || _endTime == null)) {
+      messenger.showSnackBar(const SnackBar(content: Text('Please select start/end time.')));
       return;
     }
     // Check conflict
     final conflict = await _bookingService.hasConflict(widget.listing.id, _startDate!, _endDate!);
     if (conflict) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Equipment is not available for these dates.')));
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('Equipment is not available for these dates.')));
       return;
     }
     setState(() => _loading = true);
-    final auth = context.read<AuthProvider>();
+    await _ensureEstimates();
     try {
       final booking = BookingModel(
         id: '',
@@ -441,10 +617,18 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
         pricePerDay: widget.listing.pricePerDay,
         totalPrice: _total,
         status: AppConstants.statusPending,
+        durationType: _durationType,
+        startTime: _startTime != null ? DateTime(_startDate!.year, _startDate!.month, _startDate!.day, _startTime!.hour, _startTime!.minute) : null,
+        endTime: _endTime != null ? DateTime(_startDate!.year, _startDate!.month, _startDate!.day, _endTime!.hour, _endTime!.minute) : null,
+        insuranceOpted: _insuranceOpted,
+        securityDeposit: widget.listing.securityDepositRequired,
+        distanceKm: _distanceKm,
+        costEstimate: _costEstimate,
         usageDetails: _usageCtrl.text.isNotEmpty ? _usageCtrl.text : null,
         createdAt: DateTime.now(),
       );
-      await _bookingService.createBooking(booking);
+      final bookingId = await _bookingService.createBooking(booking);
+      final createdBooking = booking.copyWith(id: bookingId);
       await _notifService.send(
         userId: widget.listing.ownerId,
         title: 'New Booking Request',
@@ -453,13 +637,15 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
         referenceId: widget.listing.id,
       );
       if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      messenger.showSnackBar(const SnackBar(
           content: Text('Booking request sent!'), backgroundColor: AppColors.success));
+      navigator.pushReplacementNamed('/booking-detail',
+          arguments: {'booking': createdBooking, 'isOwner': false});
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -470,14 +656,39 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
       body: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Card(child: Padding(padding: const EdgeInsets.all(14), child: Row(children: [
           Container(width: 56, height: 56,
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.agriculture, color: AppColors.primary, size: 30)),
+              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+              child: widget.listing.imageUrls.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        widget.listing.imageUrls.first,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.agriculture, color: AppColors.primary, size: 30),
+                      ),
+                    )
+                  : const Icon(Icons.agriculture, color: AppColors.primary, size: 30)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(widget.listing.name, style: Theme.of(context).textTheme.titleLarge),
             Text('₹${widget.listing.pricePerDay.toInt()}/day · ${widget.listing.ownerName}', style: Theme.of(context).textTheme.bodyMedium),
           ])),
         ]))),
+        const SizedBox(height: 16),
+        Text('Duration', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, children: [
+          _chip('Full Day', 'full_day'),
+          _chip('Half Day', 'half_day'),
+          _chip('Hourly', 'hourly'),
+        ]),
+        if (_durationType == 'hourly') ...[
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _timePicker(label: 'Start Time', time: _startTime, onTap: () => _pickTime(true))),
+            const SizedBox(width: 12),
+            Expanded(child: _timePicker(label: 'End Time', time: _endTime, onTap: () => _pickTime(false))),
+          ]),
+        ],
         const SizedBox(height: 24),
         Text('Select Dates', style: Theme.of(context).textTheme.headlineSmall),
         const SizedBox(height: 12),
@@ -489,12 +700,30 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
         if (_days > 0) ...[
           const SizedBox(height: 16),
           Container(padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.06), borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.2))),
+              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.2))),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Text('$_days days × ₹${widget.listing.pricePerDay.toInt()}', style: Theme.of(context).textTheme.titleMedium),
                 Text('₹${_total.toInt()}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primary)),
               ])),
+        ],
+        if (_durationType != 'full_day') ...[
+          const SizedBox(height: 8),
+          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(12)), child:
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text('Flexible pricing'),
+              Text('₹${_total.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.primary)),
+            ])),
+        ],
+        const SizedBox(height: 12),
+        if (widget.listing.insuranceAvailable || widget.listing.securityDepositRequired > 0) ...[
+          SwitchListTile(
+            value: _insuranceOpted,
+            onChanged: (v) => setState(() => _insuranceOpted = v),
+            title: const Text('Add insurance / deposit'),
+            subtitle: Text('Deposit: ₹${widget.listing.securityDepositRequired.toInt()}'),
+            activeThumbColor: AppColors.primary,
+          ),
         ],
         const SizedBox(height: 20),
         Text('Usage Details (Optional)', style: Theme.of(context).textTheme.headlineSmall),
@@ -519,6 +748,31 @@ class _BookingRequestScreenState extends State<BookingRequestScreen> {
             style: TextStyle(fontWeight: FontWeight.w700, color: date != null ? AppColors.textPrimary : AppColors.textHint)),
       ]),
     ));
+  }
+
+  Widget _timePicker({required String label, required TimeOfDay? time, required VoidCallback onTap}) {
+    return GestureDetector(onTap: onTap, child: Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: time != null ? AppColors.primary : AppColors.divider)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(time != null ? time.format(context) : 'Select',
+            style: TextStyle(fontWeight: FontWeight.w700, color: time != null ? AppColors.textPrimary : AppColors.textHint)),
+      ]),
+    ));
+  }
+
+  Widget _chip(String label, String value) {
+    final selected = _durationType == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => setState(() => _durationType = value),
+      selectedColor: AppColors.primary,
+      labelStyle: TextStyle(color: selected ? Colors.white : AppColors.textPrimary, fontWeight: FontWeight.w700),
+    );
   }
 }
 
@@ -570,6 +824,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   LatLng? _userLatLng;
   List<LatLng> _routePoints = [];
   bool _routeLoading = false;
+  bool _actionLoading = false;
 
   @override
   void initState() {
@@ -643,8 +898,19 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       body: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Row(children: [
           Container(padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.agriculture, color: AppColors.primary)),
+              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+              child: booking.listingImageUrl.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        booking.listingImageUrl,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(Icons.agriculture, color: AppColors.primary),
+                      ),
+                    )
+                  : const Icon(Icons.agriculture, color: AppColors.primary)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(booking.listingName, style: Theme.of(context).textTheme.titleLarge),
@@ -662,6 +928,11 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         _section(context, 'Payment Summary', [
           _row('Price/day', '₹${booking.pricePerDay.toInt()}'),
           _row('Total',     '₹${booking.totalPrice.toInt()}', highlight: true),
+          _row('Payment',   booking.paymentStatus),
+          if (booking.securityDeposit > 0)
+            _row('Deposit', '₹${booking.securityDeposit.toInt()}'),
+          if (booking.insuranceOpted)
+            _row('Insurance', 'Added'),
         ]),
         FutureBuilder<EquipmentListing?>(
           future: _listingFuture,
@@ -687,6 +958,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
                 _section(context, 'Location', [
                   _row('Address', listing.address),
                   _row('Coordinates', '${listing.latitude.toStringAsFixed(4)}, ${listing.longitude.toStringAsFixed(4)}'),
+                  if (booking.distanceKm != null) _row('Est. Distance', '${booking.distanceKm!.toStringAsFixed(1)} km'),
+                  if (booking.costEstimate != null) _row('Est. Cost', '₹${booking.costEstimate!.toStringAsFixed(0)}'),
                 ]),
                 const SizedBox(height: 10),
                 _mapCard(listing),
@@ -701,7 +974,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         if (booking.declineReason != null) ...[
           const SizedBox(height: 12),
           Container(padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: AppColors.error.withOpacity(0.08), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
               child: Row(children: [
                 const Icon(Icons.info_outline, color: AppColors.error, size: 18), const SizedBox(width: 8),
                 Expanded(child: Text('Reason: ${booking.declineReason}', style: const TextStyle(color: AppColors.error))),
@@ -721,25 +994,85 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             Expanded(child: ElevatedButton.icon(
               icon: const Icon(Icons.check), label: const Text('Approve'),
               onPressed: () async {
-                await _bs.updateStatus(booking.id, status: AppConstants.statusApproved);
-                await _ns.send(userId: booking.farmerId, title: 'Booking Approved!',
-                    body: 'Your request for "${booking.listingName}" was approved.', type: 'booking_update');
-                if (context.mounted) Navigator.pop(context);
+                if (_actionLoading) return;
+                setState(() => _actionLoading = true);
+                try {
+                  await _bs.updateStatus(booking.id, status: AppConstants.statusApproved);
+                  await _ns.send(userId: booking.farmerId, title: 'Booking Approved!',
+                      body: 'Your request for "${booking.listingName}" was approved.', type: 'booking_update');
+                  if (context.mounted) Navigator.pop(context);
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Approve failed: $e')),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => _actionLoading = false);
+                }
               },
             )),
           ]),
 
         if (widget.isOwner && booking.status == AppConstants.statusApproved)
-          PrimaryButton(text: 'Mark as Completed', icon: Icons.done_all, onPressed: () async {
-            await _bs.markCompleted(booking.id);
-            await _ns.send(userId: booking.farmerId, title: 'Booking Completed',
-                body: 'Your rental of "${booking.listingName}" is marked complete.', type: 'booking_update');
-            if (context.mounted) Navigator.pop(context);
-          }),
+          Column(children: [
+            PrimaryButton(text: 'Mark In Use', icon: Icons.play_arrow, onPressed: () async {
+              if (_actionLoading) return;
+              setState(() => _actionLoading = true);
+              try {
+                await _bs.updateStatus(booking.id, status: AppConstants.statusInUse);
+                await _ns.send(userId: booking.farmerId, title: 'Equipment In Use',
+                    body: 'Your booking for "${booking.listingName}" is now in use.', type: 'booking_update');
+                if (context.mounted) Navigator.pop(context);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Mark in use failed: $e')),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _actionLoading = false);
+              }
+            }),
+            const SizedBox(height: 12),
+            PrimaryButton(text: 'Mark as Completed', icon: Icons.done_all, onPressed: () async {
+              if (_actionLoading) return;
+              setState(() => _actionLoading = true);
+              try {
+                await _bs.markCompleted(booking.id);
+                await _ns.send(userId: booking.farmerId, title: 'Booking Completed',
+                    body: 'Your rental of "${booking.listingName}" is marked complete.', type: 'booking_update');
+                if (context.mounted) Navigator.pop(context);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Complete failed: $e')),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _actionLoading = false);
+              }
+            }),
+          ]),
 
         if (!widget.isOwner && booking.status == AppConstants.statusCompleted)
           PrimaryButton(text: 'Leave a Review', icon: Icons.rate_review,
               onPressed: () => _showReviewDialog(context, auth)),
+
+        if (!widget.isOwner && booking.status != AppConstants.statusDeclined && booking.status != AppConstants.statusCompleted)
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reschedule'),
+              onPressed: () => _showRescheduleDialog(context, booking),
+            )),
+            const SizedBox(width: 12),
+            Expanded(child: OutlinedButton.icon(
+              icon: const Icon(Icons.cancel_outlined),
+              label: const Text('Cancel'),
+              onPressed: () => _cancelBooking(context, booking),
+            )),
+          ]),
       ])),
     );
   }
@@ -755,8 +1088,22 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
       _section(context, heading, [
         _row('Name', name),
         _row('Phone', phone),
+        _row('Status', booking.status),
       ]),
+      if (phone.isNotEmpty && phone != 'Not provided')
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            icon: const Icon(Icons.call_outlined),
+            label: const Text('Call'),
+            onPressed: () => _callPhone(phone),
+          ),
+        ),
     ]);
+  }
+
+  Future<void> _callPhone(String phone) async {
+    await launchUrl(Uri.parse('tel:$phone'));
   }
 
   Widget _mapCard(EquipmentListing listing) {
@@ -784,7 +1131,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         ? [
             Polyline(
               points: polyPoints,
-              color: AppColors.primary.withOpacity(0.6),
+              color: AppColors.primary.withValues(alpha: 0.6),
               strokeWidth: 4,
             ),
           ]
@@ -829,6 +1176,67 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
               body: 'Your request for "${widget.booking.listingName}" was declined.', type: 'booking_update');
           if (context.mounted) { Navigator.pop(context); Navigator.pop(context); }
         }, child: const Text('Decline')),
+      ],
+    ));
+  }
+
+  void _showRescheduleDialog(BuildContext context, BookingModel booking) {
+    DateTime? start = booking.startDate;
+    DateTime? end = booking.endDate;
+    showDialog(context: context, builder: (_) => AlertDialog(
+      title: const Text('Reschedule Booking'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextButton(
+          onPressed: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: start,
+              firstDate: DateTime.now(),
+              lastDate: DateTime.now().add(const Duration(days: 180)),
+            );
+            if (picked != null) start = picked;
+          },
+          child: const Text('Pick Start Date'),
+        ),
+        TextButton(
+          onPressed: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: end,
+              firstDate: DateTime.now(),
+              lastDate: DateTime.now().add(const Duration(days: 180)),
+            );
+            if (picked != null) end = picked;
+          },
+          child: const Text('Pick End Date'),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        ElevatedButton(onPressed: () async {
+          if (start == null || end == null) return;
+          await _bs.rescheduleBooking(booking.id, start: start!, end: end!, durationType: booking.durationType);
+          await _ns.send(userId: booking.ownerId, title: 'Booking Rescheduled',
+              body: '${booking.farmerName} rescheduled ${booking.listingName}.', type: 'booking_update');
+          if (context.mounted) Navigator.pop(context);
+        }, child: const Text('Save')),
+      ],
+    ));
+  }
+
+  Future<void> _cancelBooking(BuildContext context, BookingModel booking) async {
+    final ctrl = TextEditingController();
+    showDialog(context: context, builder: (_) => AlertDialog(
+      title: const Text('Cancel Booking'),
+      content: TextField(controller: ctrl, decoration: const InputDecoration(hintText: 'Reason (optional)'), maxLines: 2),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Back')),
+        ElevatedButton(onPressed: () async {
+          await _bs.cancelBooking(booking.id, cancelledBy: 'farmer', reason: ctrl.text.isEmpty ? null : ctrl.text);
+          await _ns.send(userId: booking.ownerId, title: 'Booking Cancelled',
+              body: '${booking.farmerName} cancelled ${booking.listingName}.', type: 'booking_update');
+          if (context.mounted) { Navigator.pop(context); Navigator.pop(context); }
+        }, child: const Text('Confirm')),
       ],
     ));
   }
@@ -905,7 +1313,7 @@ class NotificationsTab extends StatelessWidget {
               final n = snap.data![i];
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: n.isRead ? AppColors.background : AppColors.primary.withOpacity(0.12),
+                  backgroundColor: n.isRead ? AppColors.background : AppColors.primary.withValues(alpha: 0.12),
                   child: Icon(_iconFor(n.type), color: n.isRead ? AppColors.textHint : AppColors.primary, size: 20)),
                 title: Text(n.title, style: TextStyle(fontWeight: n.isRead ? FontWeight.w500 : FontWeight.w700)),
                 subtitle: Text(n.body),
@@ -927,37 +1335,250 @@ class NotificationsTab extends StatelessWidget {
 // ──────────────────────────────────────────────────────────────────────────────
 // ProfileTab
 // ──────────────────────────────────────────────────────────────────────────────
-class ProfileTab extends StatelessWidget {
+class ProfileTab extends StatefulWidget {
   const ProfileTab({super.key});
+  @override
+  State<ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<ProfileTab> {
+  final _picker = ImagePicker();
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
+  final _skillsCtrl = TextEditingController();
+  final _currentJobCtrl = TextEditingController();
+  final _experienceYearsCtrl = TextEditingController();
+  final _experienceDetailsCtrl = TextEditingController();
+  final _bioCtrl = TextEditingController();
+  String _gender = 'prefer_not_to_say';
+  bool _initialized = false;
+  bool _uploading = false;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _addressCtrl.dispose();
+    _skillsCtrl.dispose();
+    _currentJobCtrl.dispose();
+    _experienceYearsCtrl.dispose();
+    _experienceDetailsCtrl.dispose();
+    _bioCtrl.dispose();
+    super.dispose();
+  }
+
+  void _initForm(UserModel user) {
+    if (_initialized) return;
+    _nameCtrl.text = user.name;
+    _phoneCtrl.text = user.phone;
+    _addressCtrl.text = user.address ?? '';
+    _skillsCtrl.text = user.skills.join(', ');
+    _currentJobCtrl.text = user.currentJob ?? '';
+    _experienceYearsCtrl.text = user.pastExperienceYears.toString();
+    _experienceDetailsCtrl.text = user.experienceDetails ?? '';
+    _bioCtrl.text = user.bio ?? '';
+    _gender = user.gender ?? 'prefer_not_to_say';
+    _initialized = true;
+  }
+
+  Future<void> _pickAndUpload(AuthProvider auth) async {
+    final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
+    if (picked == null) return;
+    setState(() => _uploading = true);
+    final ok = await auth.updateProfileImage(File(picked.path));
+    if (!mounted) return;
+    setState(() => _uploading = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'Profile photo updated' : 'Could not update photo'),
+      backgroundColor: ok ? AppColors.success : AppColors.error,
+    ));
+  }
+
+  Future<void> _saveProfile(AuthProvider auth) async {
+    if (!_formKey.currentState!.validate()) return;
+    final skills = _skillsCtrl.text
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    final years = int.tryParse(_experienceYearsCtrl.text.trim()) ?? 0;
+    final ok = await auth.updateFarmerProfile(
+      name: _nameCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
+      address: _addressCtrl.text.trim().isEmpty ? null : _addressCtrl.text.trim(),
+      skills: skills,
+      currentJob: _currentJobCtrl.text.trim().isEmpty ? null : _currentJobCtrl.text.trim(),
+      pastExperienceYears: years,
+      experienceDetails: _experienceDetailsCtrl.text.trim().isEmpty ? null : _experienceDetailsCtrl.text.trim(),
+      gender: _gender,
+      bio: _bioCtrl.text.trim().isEmpty ? null : _bioCtrl.text.trim(),
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'Profile updated successfully.' : (auth.errorMessage ?? 'Could not update profile')),
+      backgroundColor: ok ? AppColors.success : AppColors.error,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final user = auth.currentUser!;
-    final isAdmin = user.role == AppConstants.roleAdmin;
-    final roleLabel = isAdmin ? 'Admin' : 'Member';
-    final roleEmoji = isAdmin ? '🛡' : '🤝';
+    _initForm(user);
+
     return Scaffold(
       appBar: AppBar(title: const Text('My Profile')),
-      body: ListView(padding: const EdgeInsets.all(20), children: [
+      body: Form(
+        key: _formKey,
+        child: ListView(padding: const EdgeInsets.all(20), children: [
         Center(child: Column(children: [
-          CircleAvatar(radius: 44, backgroundColor: AppColors.primary,
-              child: Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
-                  style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800))),
+          Stack(alignment: Alignment.bottomRight, children: [
+            CircleAvatar(
+              radius: 48,
+              backgroundColor: AppColors.primary,
+              backgroundImage: (user.profileImageUrl != null && user.profileImageUrl!.isNotEmpty)
+                  ? NetworkImage(user.profileImageUrl!)
+                  : null,
+              child: (user.profileImageUrl == null || user.profileImageUrl!.isEmpty)
+                  ? Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                      style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w800))
+                  : null,
+            ),
+            Positioned(
+              right: -2,
+              bottom: -2,
+              child: IconButton(
+                onPressed: _uploading ? null : () => _pickAndUpload(auth),
+                icon: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [
+                    BoxShadow(color: AppColors.shadow, blurRadius: 4, offset: Offset(0, 2)),
+                  ]),
+                  child: Icon(_uploading ? Icons.hourglass_top : Icons.camera_alt_outlined,
+                      color: AppColors.primary, size: 18),
+                ),
+              ),
+            ),
+          ]),
           const SizedBox(height: 12),
           Text(user.name, style: Theme.of(context).textTheme.headlineMedium),
           Container(margin: const EdgeInsets.only(top: 4),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-              child: Text('$roleEmoji $roleLabel',
-                  style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700))),
+              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+              child: const Text('Farmer',
+                style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w700))),
         ])),
         const SizedBox(height: 28),
-        Card(child: Column(children: [
-          _pRow(Icons.email_outlined, 'Email', user.email),
-          const Divider(height: 1),
-          _pRow(Icons.phone_outlined, 'Phone', user.phone),
-        ])),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                _pRow(Icons.email_outlined, 'Email', user.email),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: _nameCtrl,
+                  decoration: const InputDecoration(labelText: 'Full Name', prefixIcon: Icon(Icons.person_outline)),
+                  validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _phoneCtrl,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(labelText: 'Phone Number', prefixIcon: Icon(Icons.phone_outlined)),
+                  validator: (v) => v == null || v.trim().length < 10 ? 'Enter valid phone number' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _addressCtrl,
+                  decoration: const InputDecoration(labelText: 'Address / Village', prefixIcon: Icon(Icons.location_on_outlined)),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: _gender,
+                  decoration: const InputDecoration(labelText: 'Gender', prefixIcon: Icon(Icons.wc_outlined)),
+                  items: const [
+                    DropdownMenuItem(value: 'male', child: Text('Male')),
+                    DropdownMenuItem(value: 'female', child: Text('Female')),
+                    DropdownMenuItem(value: 'other', child: Text('Other')),
+                    DropdownMenuItem(value: 'prefer_not_to_say', child: Text('Prefer not to say')),
+                  ],
+                  onChanged: (v) => setState(() => _gender = v ?? 'prefer_not_to_say'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                TextFormField(
+                  controller: _skillsCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Skills',
+                    hintText: 'e.g. Tractor driving, Irrigation, Harvest planning',
+                    prefixIcon: Icon(Icons.build_circle_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _currentJobCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Current Job / Focus',
+                    hintText: 'e.g. Crop farmer, dairy support, seasonal contractor',
+                    prefixIcon: Icon(Icons.work_outline),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _experienceYearsCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Past Experience (Years)',
+                    prefixIcon: Icon(Icons.timeline_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _experienceDetailsCtrl,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Experience Details',
+                    hintText: 'Mention projects, crops handled, tools/equipment used, achievements',
+                    prefixIcon: Icon(Icons.description_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _bioCtrl,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Bio',
+                    hintText: 'Write a short introduction about yourself',
+                    prefixIcon: Icon(Icons.person_pin_outlined),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: 16),
+        PrimaryButton(
+          text: 'Update Profile',
+          icon: Icons.save_outlined,
+          isLoading: auth.isLoading,
+          onPressed: () => _saveProfile(auth),
+        ),
+        const SizedBox(height: 12),
         OutlinedButton.icon(
           icon: const Icon(Icons.logout, color: AppColors.error),
           label: const Text('Sign Out', style: TextStyle(color: AppColors.error)),
@@ -968,8 +1589,10 @@ class ProfileTab extends StatelessWidget {
           },
         ),
       ]),
+      ),
     );
   }
+
   Widget _pRow(IconData icon, String label, String value) {
     return ListTile(
       leading: Icon(icon, color: AppColors.primary),

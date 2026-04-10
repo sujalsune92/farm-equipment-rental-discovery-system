@@ -11,11 +11,9 @@ import '../models/models.dart';
 import '../services/services.dart';
 import '../utils/app_theme.dart';
 import '../widgets/widgets.dart';
-import 'farmer_screens.dart'; // NotificationsTab, ProfileTab, BookingCard, BookingDetailScreen
+import 'farmer_screens.dart'; 
 
-// ──────────────────────────────────────────────────────────────────────────────
-// OwnerHomeScreen
-// ──────────────────────────────────────────────────────────────────────────────
+
 class OwnerHomeScreen extends StatefulWidget {
   const OwnerHomeScreen({super.key});
   @override State<OwnerHomeScreen> createState() => _OwnerHomeScreenState();
@@ -48,9 +46,7 @@ class _OwnerHomeScreenState extends State<OwnerHomeScreen> {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// OwnerDashboardTab
-// ──────────────────────────────────────────────────────────────────────────────
+
 class OwnerDashboardTab extends StatelessWidget {
   const OwnerDashboardTab({super.key});
   @override
@@ -81,7 +77,7 @@ class OwnerDashboardTab extends StatelessWidget {
             builder: (_, snap) {
               final all      = snap.data ?? [];
               final pending  = all.where((b) => b.status == AppConstants.statusPending).length;
-              final approved = all.where((b) => b.status == AppConstants.statusApproved).length;
+              final approved = all.where((b) => b.status == AppConstants.statusApproved || b.status == AppConstants.statusInUse).length;
               final done     = all.where((b) => b.status == AppConstants.statusCompleted).length;
               return Row(children: [
                 _stat(context, '$pending',  'Pending',  Icons.hourglass_empty,    AppColors.warning),
@@ -92,15 +88,41 @@ class OwnerDashboardTab extends StatelessWidget {
               ]);
             },
           ),
+          const SizedBox(height: 12),
+          StreamBuilder<List<BookingModel>>(
+            stream: bs.getOwnerBookings(auth.currentUser!.id),
+            builder: (_, snap) {
+              final all = snap.data ?? [];
+              final revenue = all.where((b) => b.paymentStatus == 'paid').fold<double>(0, (sum, b) => sum + b.totalPrice);
+              const daysHorizon = 30;
+              final periodStart = DateTime.now().subtract(const Duration(days: 30));
+              final periodBookings = all.where((b) => b.startDate.isAfter(periodStart)).toList();
+              final utilization = _computeUtilization(periodBookings, daysHorizon);
+              final repeatFarmers = all.map((b) => b.farmerId).fold<Map<String,int>>({}, (map, id) { map[id] = (map[id] ?? 0) + 1; return map; });
+              final repeatPct = repeatFarmers.isEmpty ? 0 : (repeatFarmers.values.where((c) => c > 1).length / repeatFarmers.length * 100);
+              return Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('30-day Insights', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  _insightRow('Revenue (paid)', '₹${revenue.toStringAsFixed(0)}'),
+                  _insightRow('Utilization', '${utilization.toStringAsFixed(1)}%'),
+                  _insightRow('Repeat renters', '${repeatPct.toStringAsFixed(0)}%'),
+                ],
+              )));
+            },
+          ),
           const SizedBox(height: 20),
-          SectionHeader(title: 'Pending Requests'),
+          const SectionHeader(title: 'Pending Requests'),
           StreamBuilder<List<BookingModel>>(
             stream: bs.getOwnerBookings(auth.currentUser!.id),
             builder: (_, snap) {
               if (!snap.hasData) return const Center(child: CircularProgressIndicator());
               final pending = snap.data!.where((b) => b.status == AppConstants.statusPending).take(3).toList();
-              if (pending.isEmpty) return const Padding(padding: EdgeInsets.symmetric(vertical: 20),
+              if (pending.isEmpty) {
+                return const Padding(padding: EdgeInsets.symmetric(vertical: 20),
                   child: Center(child: Text('No pending requests.', style: TextStyle(color: AppColors.textSecondary))));
+              }
               return Column(children: pending.map((b) => BookingCard(booking: b,
                   onTap: () => Navigator.pushNamed(context, '/booking-detail', arguments: {'booking': b, 'isOwner': true}))).toList());
             },
@@ -118,11 +140,36 @@ class OwnerDashboardTab extends StatelessWidget {
       Text(label, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
     ]))));
   }
+
+  double _computeUtilization(List<BookingModel> bookings, int daysHorizon) {
+    final horizonHours = daysHorizon * 24.0;
+    double bookedHours = 0;
+    for (final b in bookings) {
+      if (b.durationType == 'hourly' && b.startTime != null && b.endTime != null) {
+        bookedHours += b.endTime!.difference(b.startTime!).inMinutes / 60.0;
+      } else if (b.durationType == 'half_day') {
+        bookedHours += 12;
+      } else {
+        bookedHours += (b.durationDays * 24);
+      }
+    }
+    if (horizonHours == 0) return 0;
+    final pct = (bookedHours / horizonHours) * 100;
+    return pct.clamp(0, 100);
+  }
+
+  Widget _insightRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label, style: const TextStyle(color: AppColors.textSecondary)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+      ]),
+    );
+  }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// OwnerListingsTab
-// ──────────────────────────────────────────────────────────────────────────────
+
 class OwnerListingsTab extends StatelessWidget {
   const OwnerListingsTab({super.key});
   @override
@@ -140,11 +187,13 @@ class OwnerListingsTab extends StatelessWidget {
         stream: ls.getOwnerListings(auth.currentUser!.id), // ← .id
         builder: (_, snap) {
           if (snap.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          if (!snap.hasData || snap.data!.isEmpty) return EmptyState(
+          if (!snap.hasData || snap.data!.isEmpty) {
+            return EmptyState(
             icon: Icons.add_box_outlined, title: 'No Listings Yet',
             subtitle: 'Add your first equipment to start getting bookings.',
             actionLabel: 'Add Equipment', onAction: () => Navigator.pushNamed(context, '/add-listing'),
           );
+          }
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
             itemCount: snap.data!.length,
@@ -153,7 +202,7 @@ class OwnerListingsTab extends StatelessWidget {
               return Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(
                 contentPadding: const EdgeInsets.all(12),
                 leading: Container(width: 56, height: 56,
-                    decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                    decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                     child: listing.imageUrls.isNotEmpty
                         ? ClipRRect(borderRadius: BorderRadius.circular(10),
                             child: Image.network(listing.imageUrls.first, fit: BoxFit.cover,
@@ -165,7 +214,7 @@ class OwnerListingsTab extends StatelessWidget {
                   const SizedBox(height: 4),
                   Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                          color: listing.isActive ? AppColors.success.withOpacity(0.1) : AppColors.error.withOpacity(0.1),
+                          color: listing.isActive ? AppColors.success.withValues(alpha: 0.1) : AppColors.error.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6)),
                       child: Text(listing.isActive ? 'Active' : 'Inactive',
                           style: TextStyle(color: listing.isActive ? AppColors.success : AppColors.error, fontSize: 11, fontWeight: FontWeight.w700))),
@@ -180,8 +229,11 @@ class OwnerListingsTab extends StatelessWidget {
                     ])),
                   ],
                   onSelected: (v) async {
-                    if (v == 'edit') Navigator.pushNamed(context, '/add-listing', arguments: listing);
-                    else if (v == 'toggle') await ls.updateListing(listing.id, {'is_active': !listing.isActive});
+                    if (v == 'edit') {
+                      Navigator.pushNamed(context, '/add-listing', arguments: listing);
+                    } else if (v == 'toggle') {
+                      await ls.updateListing(listing.id, {'is_active': !listing.isActive});
+                    }
                   },
                 ),
               ));
@@ -193,9 +245,7 @@ class OwnerListingsTab extends StatelessWidget {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// AddEditListingScreen — uses lat/lng doubles, NOT GeoPoint
-// ──────────────────────────────────────────────────────────────────────────────
+
 class AddEditListingScreen extends StatefulWidget {
   final EquipmentListing? existing;
   const AddEditListingScreen({super.key, this.existing});
@@ -209,12 +259,11 @@ class _AddEditListingScreenState extends State<AddEditListingScreen> {
   final _addrCtrl   = TextEditingController();
 
   String _type = AppConstants.equipmentTypes.first;
-  List<File> _newImages = [];
+  final List<File> _newImages = [];
   List<String> _existingImageUrls = [];
   bool _loading = false;
   bool _locating = false;
 
-  // Plain doubles — no GeoPoint
   double? _lat;
   double? _lng;
 
@@ -234,8 +283,8 @@ class _AddEditListingScreenState extends State<AddEditListingScreen> {
       _addrCtrl.text  = e.address;
       _type = e.type;
       _existingImageUrls = List.from(e.imageUrls);
-      _lat = e.latitude;   // ← latitude double
-      _lng = e.longitude;  // ← longitude double
+      _lat = e.latitude;  
+      _lng = e.longitude;  
     } else {
       _detectLocation();
     }
@@ -259,20 +308,24 @@ class _AddEditListingScreenState extends State<AddEditListingScreen> {
   }
 
   Future<void> _pickImages() async {
+    final messenger = ScaffoldMessenger.of(context);
     final picker = ImagePicker();
     final picked = await picker.pickMultiImage(imageQuality: 70);
+    if (!context.mounted) return;
     final remaining = AppConstants.maxImages - _existingImageUrls.length - _newImages.length;
     if (remaining <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Maximum 5 images allowed.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Maximum 5 images allowed.')));
       return;
     }
     setState(() => _newImages.addAll(picked.take(remaining).map((x) => File(x.path))));
   }
 
   Future<void> _submit() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
     if (!_formKey.currentState!.validate()) return;
     if (_lat == null || _lng == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not detect location. Please tap the location button to set it.')));
+      messenger.showSnackBar(const SnackBar(content: Text('Could not detect location. Please tap the location button to set it.')));
       return;
     }
     setState(() => _loading = true);
@@ -295,8 +348,8 @@ class _AddEditListingScreenState extends State<AddEditListingScreen> {
         type:        _type,
         pricePerDay: double.parse(_priceCtrl.text),
         imageUrls:   imageUrls,
-        latitude:    _lat!,    // ← plain double
-        longitude:   _lng!,    // ← plain double
+        latitude:    _lat!,    
+        longitude:   _lng!,    
         address:     _addrCtrl.text.trim(),
         createdAt:   _isEdit ? widget.existing!.createdAt : DateTime.now(),
       );
@@ -308,15 +361,16 @@ class _AddEditListingScreenState extends State<AddEditListingScreen> {
       }
 
       if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      navigator.pop();
+      messenger.showSnackBar(SnackBar(
         content: Text(_isEdit ? 'Listing updated!' : 'Listing published!'),
         backgroundColor: AppColors.success,
       ));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -349,7 +403,7 @@ class _AddEditListingScreenState extends State<AddEditListingScreen> {
             validator: (v) => v == null || v.isEmpty ? 'Required' : null),
         const SizedBox(height: 14),
         DropdownButtonFormField<String>(
-            value: _type,
+            initialValue: _type,
             decoration: const InputDecoration(labelText: 'Equipment Type *'),
             items: AppConstants.equipmentTypes.map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
             onChanged: (v) => setState(() => _type = v!)),
@@ -430,9 +484,7 @@ class _AddEditListingScreenState extends State<AddEditListingScreen> {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// OwnerBookingsTab
-// ──────────────────────────────────────────────────────────────────────────────
+
 class OwnerBookingsTab extends StatefulWidget {
   const OwnerBookingsTab({super.key});
   @override State<OwnerBookingsTab> createState() => _OwnerBookingsTabState();

@@ -9,12 +9,13 @@ import 'screens/farmer_screens.dart';
 import 'screens/owner_screens.dart';
 import 'screens/admin_screen.dart';
 import 'screens/unified_home.dart';
+import 'screens/farmer_worker_connectivity_screen.dart';
+import 'screens/crop_disease_screen_web.dart' if (dart.library.io) 'screens/crop_disease_screen_io.dart';
 import 'models/models.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── Initialize Supabase (replaces Firebase.initializeApp) ──────────────────
   await Supabase.initialize(
     url: AppConstants.supabaseUrl,
     anonKey: AppConstants.supabaseAnonKey,
@@ -56,7 +57,7 @@ class KisanYantraApp extends StatelessWidget {
         return _slide(const ForgotPasswordScreen());
       case '/home':
         return _fade(const UnifiedHomeScreen());
-      case '/farmer': // legacy path → unified experience
+      case '/farmer': 
       case '/owner':
         return _fade(const UnifiedHomeScreen());
       case '/equipment-detail':
@@ -69,8 +70,10 @@ class KisanYantraApp extends StatelessWidget {
           booking: args['booking'] as BookingModel,
           isOwner: args['isOwner'] as bool? ?? false,
         ));
-      case '/owner':
-        return _fade(const OwnerHomeScreen());
+      case '/crop-disease':
+        return _slide(const CropDiseaseScreen());
+      case '/farmer-worker':
+        return _slide(const FarmerWorkerConnectivityScreen());
       case '/add-listing':
         return _slide(AddEditListingScreen(existing: settings.arguments as EquipmentListing?));
       case '/admin':

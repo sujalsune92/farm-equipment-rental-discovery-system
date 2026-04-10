@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/models.dart';
@@ -6,6 +9,8 @@ import '../utils/app_theme.dart';
 
 class AuthProvider extends ChangeNotifier {
   final _authService = AuthService();
+  final _storageService = StorageService();
+  final Completer<void> _bootstrapped = Completer<void>();
 
   UserModel? _currentUser;
   bool _isLoading = false;
@@ -16,24 +21,58 @@ class AuthProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isLoggedIn => _currentUser != null;
   bool get isAdmin  => _currentUser?.role == AppConstants.roleAdmin;
+  bool get isBootstrapped => _bootstrapped.isCompleted;
 
   AuthProvider() {
-    final existing = _authService.currentUser;
-    if (existing != null) {
-      _authService.getUser(existing.id).then((u) {
-        _currentUser = u;
-        notifyListeners();
-      });
-    }
+    _bootstrap();
     _authService.authStateChanges.listen((event) async {
-      final u = event.session?.user;
-      if (u == null) {
+      try {
+        final u = event.session?.user;
+        if (u == null) {
+          _currentUser = null;
+        } else {
+          _currentUser = await _authService.getUser(u.id);
+        }
+      } catch (e) {
         _currentUser = null;
-      } else {
-        _currentUser = await _authService.getUser(u.id);
+        _errorMessage = 'Unable to refresh your session. Please login again.';
+        debugPrint('Auth state sync failed: $e');
+      } finally {
+        _completeBootstrapOnce();
+        notifyListeners();
       }
-      notifyListeners();
     });
+  }
+
+  Future<void> _bootstrap() async {
+    try {
+      final existing = _authService.currentUser;
+      if (existing != null) {
+        _currentUser = await _authService.getUser(existing.id);
+      }
+    } catch (e) {
+      _currentUser = null;
+      _errorMessage = 'Unable to restore your session. Please login again.';
+      debugPrint('Auth bootstrap failed: $e');
+    } finally {
+      _completeBootstrapOnce();
+      notifyListeners();
+    }
+  }
+
+  void _completeBootstrapOnce() {
+    if (!_bootstrapped.isCompleted) {
+      _bootstrapped.complete();
+    }
+  }
+
+  Future<void> waitForBootstrap({Duration timeout = const Duration(seconds: 8)}) async {
+    try {
+      await _bootstrapped.future.timeout(timeout);
+    } on TimeoutException {
+      debugPrint('Auth bootstrap timed out. Continuing with unauthenticated flow.');
+      _completeBootstrapOnce();
+    }
   }
 
   void _setLoading(bool v) { _isLoading = v; notifyListeners(); }
@@ -43,6 +82,14 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true); _setError(null);
     try {
       _currentUser = await _authService.login(email: email, password: password);
+      final role = _currentUser?.role;
+      if (role != AppConstants.roleFarmer) {
+        await _authService.signOut();
+        _currentUser = null;
+        _setError('Only Farmer login is enabled in this app.');
+        _setLoading(false);
+        return false;
+      }
       _setLoading(false);
       return true;
     } on AuthException catch (e) {
@@ -54,7 +101,7 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> register({
     required String name, required String email,
-    required String password, required String phone, String role = AppConstants.roleUser,
+    required String password, required String phone, String role = AppConstants.roleFarmer,
   }) async {
     _setLoading(true); _setError(null);
     try {
@@ -96,6 +143,70 @@ class AuthProvider extends ChangeNotifier {
     if (_currentUser != null) {
       _currentUser = await _authService.getUser(_currentUser!.id);
       notifyListeners();
+    }
+  }
+
+  Future<bool> updateProfileImage(File image) async {
+    if (_currentUser == null) return false;
+    _setLoading(true);
+    try {
+      final url = await _storageService.uploadProfileImage(image, _currentUser!.id);
+      await _authService.updateProfile(_currentUser!.id, {'profile_image_url': url});
+      _currentUser = _currentUser!.copyWith(profileImageUrl: url);
+      _setLoading(false);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      _setLoading(false);
+      return false;
+    }
+  }
+
+  Future<bool> updateFarmerProfile({
+    required String name,
+    required String phone,
+    String? address,
+    List<String> skills = const [],
+    String? currentJob,
+    int pastExperienceYears = 0,
+    String? experienceDetails,
+    String? gender,
+    String? bio,
+  }) async {
+    if (_currentUser == null) return false;
+    _setLoading(true);
+    try {
+      final payload = {
+        'name': name,
+        'phone': phone,
+        'address': address,
+        'skills': skills,
+        'current_job': currentJob,
+        'past_experience_years': pastExperienceYears,
+        'experience_details': experienceDetails,
+        'gender': gender,
+        'bio': bio,
+      };
+      await _authService.updateProfile(_currentUser!.id, payload);
+      _currentUser = _currentUser!.copyWith(
+        name: name,
+        phone: phone,
+        address: address,
+        skills: skills,
+        currentJob: currentJob,
+        pastExperienceYears: pastExperienceYears,
+        experienceDetails: experienceDetails,
+        gender: gender,
+        bio: bio,
+      );
+      _setLoading(false);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setError(e.toString());
+      _setLoading(false);
+      return false;
     }
   }
 
