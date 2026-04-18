@@ -1,10 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import '../utils/app_theme.dart';
 
 class CropDiseaseScreen extends StatefulWidget {
@@ -19,12 +19,15 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
   File? _imageFile;
   String? _predictedLabel;
   double? _confidence;
-  String? _remedy;
+  String? _matchedRemedyClass;
+  Map<String, List<String>>? _matchedRemedies;
   String? _error;
   bool _loadingModel = false;
   bool _running = false;
   Interpreter? _interpreter;
   List<String> _labels = [];
+  final Map<String, Map<String, List<String>>> _remediesByNormalizedClass = {};
+  final Map<String, String> _displayClassByNormalizedClass = {};
   static const List<String> _defaultLabels = [
     'Apple___Apple_scab',
     'Apple___Black_rot',
@@ -68,13 +71,110 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
 
   static const _modelAsset = 'assets/models/model.tflite';
   static const _labelsAsset = 'assets/models/labels.txt';
-  static const _geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
-  static const _geminiModel = 'gemini-1.0-pro';
+  static const _remediesAsset = 'assets/models/remedieses.json';
+  static const List<String> _remedyCategories = [
+    'chemical',
+    'organic',
+    'biological',
+    'cultural',
+    'mechanical',
+  ];
 
   @override
   void initState() {
     super.initState();
     _loadModel();
+    _loadRemedies();
+  }
+
+  Future<void> _loadRemedies() async {
+    try {
+      final raw = await rootBundle.loadString(_remediesAsset);
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Invalid remedies JSON format.');
+      }
+      final data = decoded['data'];
+      if (data is! List) {
+        throw const FormatException('Expected "data" array in remedies JSON.');
+      }
+
+      for (final item in data) {
+        if (item is! Map<String, dynamic>) continue;
+        final diseaseClass = item['class']?.toString().trim();
+        final remedies = item['remedies'];
+        if (diseaseClass == null || diseaseClass.isEmpty || remedies is! Map) continue;
+
+        final normalizedClass = _normalizeDiseaseName(diseaseClass);
+        final remedyMap = <String, List<String>>{};
+        for (final category in _remedyCategories) {
+          final value = remedies[category];
+          if (value is List) {
+            remedyMap[category] = value.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+          } else {
+            remedyMap[category] = const [];
+          }
+        }
+
+        _remediesByNormalizedClass[normalizedClass] = remedyMap;
+        _displayClassByNormalizedClass[normalizedClass] = diseaseClass;
+      }
+    } catch (e) {
+      debugPrint('Remedy JSON load error: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Remedy file load failed: $e';
+        });
+      }
+    }
+  }
+
+  String _normalizeDiseaseName(String input) {
+    return input.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  Set<String> _tokensOf(String value) {
+    return _normalizeDiseaseName(value).split(' ').where((e) => e.isNotEmpty).toSet();
+  }
+
+  MapEntry<String, Map<String, List<String>>>? _matchRemedies(String predictedClass) {
+    if (_remediesByNormalizedClass.isEmpty) return null;
+
+    final normalizedPrediction = _normalizeDiseaseName(predictedClass);
+    final exact = _remediesByNormalizedClass[normalizedPrediction];
+    if (exact != null) {
+      return MapEntry(
+        _displayClassByNormalizedClass[normalizedPrediction] ?? predictedClass,
+        exact,
+      );
+    }
+
+    final predictionTokens = _tokensOf(predictedClass);
+    double bestScore = 0;
+    String? bestKey;
+
+    for (final entry in _remediesByNormalizedClass.entries) {
+      final candidateTokens = _tokensOf(entry.key);
+      if (candidateTokens.isEmpty) continue;
+      final overlap = predictionTokens.intersection(candidateTokens).length;
+      var score = overlap / candidateTokens.length;
+      if (normalizedPrediction.contains(entry.key) || entry.key.contains(normalizedPrediction)) {
+        score += 0.35;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestKey = entry.key;
+      }
+    }
+
+    if (bestKey != null && bestScore >= 0.45) {
+      return MapEntry(
+        _displayClassByNormalizedClass[bestKey] ?? predictedClass,
+        _remediesByNormalizedClass[bestKey]!,
+      );
+    }
+
+    return null;
   }
 
   Future<void> _loadModel() async {
@@ -108,7 +208,8 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
       _imageFile = File(picked.path);
       _predictedLabel = null;
       _confidence = null;
-      _remedy = null;
+      _matchedRemedyClass = null;
+      _matchedRemedies = null;
     });
   }
 
@@ -119,7 +220,8 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
       _imageFile = File(picked.path);
       _predictedLabel = null;
       _confidence = null;
-      _remedy = null;
+      _matchedRemedyClass = null;
+      _matchedRemedies = null;
     });
   }
 
@@ -160,9 +262,13 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
           maxIdx = i;
         }
       }
+      final predictedLabel = _labels.isNotEmpty && maxIdx < _labels.length ? _labels[maxIdx] : 'Class $maxIdx';
+      final matched = _matchRemedies(predictedLabel);
       setState(() {
-        _predictedLabel = _labels.isNotEmpty && maxIdx < _labels.length ? _labels[maxIdx] : 'Class $maxIdx';
+        _predictedLabel = predictedLabel;
         _confidence = maxScore;
+        _matchedRemedyClass = matched?.key;
+        _matchedRemedies = matched?.value;
         _error = null;
       });
     } catch (e) {
@@ -180,29 +286,6 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
   void dispose() {
     _interpreter?.close();
     super.dispose();
-  }
-
-  Future<void> _generateRemedy() async {
-    if (_predictedLabel == null) return;
-    setState(() => _running = true);
-    try {
-      if (_geminiApiKey.isEmpty) {
-        throw Exception('Set GEMINI_API_KEY via --dart-define to use remedies');
-      }
-      final model = GenerativeModel(model: _geminiModel, apiKey: _geminiApiKey);
-      final prompt = 'Crop disease: $_predictedLabel. Provide concise remedies and precautions for farmers.';
-      final response = await model.generateContent([Content.text(prompt)]);
-      setState(() => _remedy = response.text ?? 'No remedy generated.');
-      _error = null;
-    } catch (e) {
-      debugPrint('Gemini error: $e');
-      _error = 'Remedy generation failed: $e';
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Remedy generation failed: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _running = false);
-    }
   }
 
   @override
@@ -289,17 +372,16 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
                     const SizedBox(height: 16),
                     Text('Prediction: $_predictedLabel', style: const TextStyle(fontWeight: FontWeight.w700)),
                     if (_confidence != null) Text('Confidence: ${(_confidence! * 100).toStringAsFixed(1)}%'),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: _running ? null : _generateRemedy,
-                      child: const Text('Get remedy from Gemini'),
-                    ),
+                    if (_matchedRemedies == null) ...[
+                      const SizedBox(height: 8),
+                      const Text('No matching remedy found in remedieses.json for this disease.'),
+                    ],
                   ],
                 ],
               ),
             ),
           ),
-          if (_remedy != null) ...[
+          if (_matchedRemedies != null) ...[
             const SizedBox(height: 16),
             Card(
               child: Padding(
@@ -307,9 +389,20 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Recommended remedy', style: TextStyle(fontWeight: FontWeight.w700)),
+                    const Text('Recommended remedies (5 types)', style: TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    Text(_remedy!),
+                    if (_matchedRemedyClass != null)
+                      Text('Matched disease: $_matchedRemedyClass', style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    ..._remedyCategories.map((category) {
+                      final values = _matchedRemedies![category] ?? const [];
+                      final title = '${category[0].toUpperCase()}${category.substring(1)}';
+                      final text = values.isEmpty ? 'Not available' : values.join(', ');
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text('$title: $text'),
+                      );
+                    }),
                   ],
                 ),
               ),

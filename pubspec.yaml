@@ -40,7 +40,6 @@ dependencies:
   url_launcher: ^6.2.5
   http: ^1.1.0
   tflite_flutter: ^0.12.1
-  google_generative_ai: ^0.4.3
   image: ^4.1.7
 
 dev_dependencies:

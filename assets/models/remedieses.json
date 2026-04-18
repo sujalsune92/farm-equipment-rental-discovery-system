@@ -1,0 +1,401 @@
+{
+  "data": [
+    
+    {
+      "class": "Apple___Apple_scab",
+      "remedies": {
+        "chemical": ["Mancozeb 2g/L spray every 7 days", "Captan fungicide application"],
+        "organic": ["Neem oil spray weekly", "Baking soda solution (1 tsp/L)"],
+        "biological": ["Trichoderma viride application"],
+        "cultural": ["Avoid overhead irrigation", "Ensure proper spacing"],
+        "mechanical": ["Remove infected leaves", "Destroy fallen debris"]
+      }
+    },
+
+    {
+      "class": "Apple___Black_rot",
+      "remedies": {
+        "chemical": ["Thiophanate-methyl spray", "Copper fungicide"],
+        "organic": ["Neem oil spray", "Garlic extract spray"],
+        "biological": ["Bacillus subtilis"],
+        "cultural": ["Prune infected branches", "Maintain orchard hygiene"],
+        "mechanical": ["Remove infected fruits", "Burn plant waste"]
+      }
+    },
+
+    {
+      "class": "Apple___Cedar_apple_rust",
+      "remedies": {
+        "chemical": ["Myclobutanil fungicide"],
+        "organic": ["Neem oil spray"],
+        "biological": ["Bacillus-based fungicide"],
+        "cultural": ["Remove nearby juniper plants", "Ensure airflow"],
+        "mechanical": ["Prune infected leaves"]
+      }
+    },
+
+    {
+      "class": "Apple___Healthy",
+      "remedies": {
+        "chemical": ["No treatment needed"],
+        "organic": ["Use compost regularly"],
+        "biological": ["Apply biofertilizers"],
+        "cultural": ["Maintain irrigation schedule"],
+        "mechanical": ["Regular inspection"]
+      }
+    },
+
+    {
+      "class": "Blueberry___Healthy",
+      "remedies": {
+        "chemical": ["No treatment required"],
+        "organic": ["Use organic mulch"],
+        "biological": ["Mycorrhiza application"],
+        "cultural": ["Maintain soil acidity (pH 4.5–5.5)"],
+        "mechanical": ["Remove weeds"]
+      }
+    },
+
+    {
+      "class": "Cherry___Powdery_mildew",
+      "remedies": {
+        "chemical": ["Sulfur fungicide", "Potassium bicarbonate spray"],
+        "organic": ["Milk spray (1:10 ratio)", "Neem oil"],
+        "biological": ["Bacillus subtilis"],
+        "cultural": ["Improve air circulation"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Cherry___Healthy",
+      "remedies": {
+        "chemical": ["No treatment needed"],
+        "organic": ["Use compost"],
+        "biological": ["Biofertilizers"],
+        "cultural": ["Proper pruning"],
+        "mechanical": ["Routine inspection"]
+      }
+    },
+
+    {
+      "class": "Corn___Gray_leaf_spot",
+      "remedies": {
+        "chemical": ["Azoxystrobin fungicide"],
+        "organic": ["Neem oil spray"],
+        "biological": ["Trichoderma"],
+        "cultural": ["Crop rotation"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Corn___Common_rust",
+      "remedies": {
+        "chemical": ["Propiconazole spray"],
+        "organic": ["Compost tea"],
+        "biological": ["Trichoderma"],
+        "cultural": ["Plant resistant varieties"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Corn___Northern_Leaf_Blight",
+      "remedies": {
+        "chemical": ["Mancozeb spray"],
+        "organic": ["Neem oil"],
+        "biological": ["Bacillus subtilis"],
+        "cultural": ["Crop rotation"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Corn___Healthy",
+      "remedies": {
+        "chemical": ["No treatment"],
+        "organic": ["Organic compost"],
+        "biological": ["Biofertilizer"],
+        "cultural": ["Balanced fertilization"],
+        "mechanical": ["Field monitoring"]
+      }
+    },
+
+    {
+      "class": "Grape___Black_rot",
+      "remedies": {
+        "chemical": ["Mancozeb", "Myclobutanil"],
+        "organic": ["Neem oil"],
+        "biological": ["Trichoderma"],
+        "cultural": ["Prune vines"],
+        "mechanical": ["Remove infected berries"]
+      }
+    },
+
+    {
+      "class": "Grape___Esca_(Black_Measles)",
+      "remedies": {
+        "chemical": ["No effective cure"],
+        "organic": ["Neem oil preventive"],
+        "biological": ["Trichoderma"],
+        "cultural": ["Avoid pruning wounds"],
+        "mechanical": ["Remove infected vines"]
+      }
+    },
+
+    {
+      "class": "Grape___Leaf_blight",
+      "remedies": {
+        "chemical": ["Copper fungicide"],
+        "organic": ["Neem oil"],
+        "biological": ["Bacillus subtilis"],
+        "cultural": ["Improve ventilation"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Grape___Healthy",
+      "remedies": {
+        "chemical": ["None"],
+        "organic": ["Organic compost"],
+        "biological": ["Biofertilizer"],
+        "cultural": ["Pruning"],
+        "mechanical": ["Monitoring"]
+      }
+    },
+
+    {
+      "class": "Orange___Citrus_greening",
+      "remedies": {
+        "chemical": ["Imidacloprid for psyllids"],
+        "organic": ["Neem oil spray"],
+        "biological": ["Introduce parasitoids"],
+        "cultural": ["Use disease-free plants"],
+        "mechanical": ["Remove infected trees"]
+      }
+    },
+
+    {
+      "class": "Peach___Bacterial_spot",
+      "remedies": {
+        "chemical": ["Copper spray"],
+        "organic": ["Neem oil"],
+        "biological": ["Bacillus"],
+        "cultural": ["Avoid overhead irrigation"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Peach___Healthy",
+      "remedies": {
+        "chemical": ["None"],
+        "organic": ["Compost"],
+        "biological": ["Biofertilizer"],
+        "cultural": ["Pruning"],
+        "mechanical": ["Inspection"]
+      }
+    },
+
+    {
+      "class": "Potato___Early_blight",
+      "remedies": {
+        "chemical": ["Chlorothalonil"],
+        "organic": ["Neem oil"],
+        "biological": ["Trichoderma"],
+        "cultural": ["Crop rotation"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Potato___Late_blight",
+      "remedies": {
+        "chemical": ["Metalaxyl"],
+        "organic": ["Copper fungicide"],
+        "biological": ["Bacillus"],
+        "cultural": ["Avoid water stagnation"],
+        "mechanical": ["Remove infected plants"]
+      }
+    },
+
+    {
+      "class": "Potato___Healthy",
+      "remedies": {
+        "chemical": ["None"],
+        "organic": ["Compost"],
+        "biological": ["Biofertilizer"],
+        "cultural": ["Proper irrigation"],
+        "mechanical": ["Monitoring"]
+      }
+    },
+
+    {
+      "class": "Raspberry___Healthy",
+      "remedies": {
+        "chemical": ["None"],
+        "organic": ["Mulching"],
+        "biological": ["Mycorrhiza"],
+        "cultural": ["Weed control"],
+        "mechanical": ["Inspection"]
+      }
+    },
+
+    {
+      "class": "Soybean___Healthy",
+      "remedies": {
+        "chemical": ["None"],
+        "organic": ["Organic manure"],
+        "biological": ["Rhizobium inoculation"],
+        "cultural": ["Crop rotation"],
+        "mechanical": ["Monitoring"]
+      }
+    },
+
+    {
+      "class": "Squash___Powdery_mildew",
+      "remedies": {
+        "chemical": ["Sulfur spray"],
+        "organic": ["Milk spray"],
+        "biological": ["Bacillus"],
+        "cultural": ["Increase spacing"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Strawberry___Leaf_scorch",
+      "remedies": {
+        "chemical": ["Fungicide spray"],
+        "organic": ["Neem oil"],
+        "biological": ["Trichoderma"],
+        "cultural": ["Avoid wet leaves"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Strawberry___Healthy",
+      "remedies": {
+        "chemical": ["None"],
+        "organic": ["Mulch"],
+        "biological": ["Biofertilizer"],
+        "cultural": ["Proper irrigation"],
+        "mechanical": ["Inspection"]
+      }
+    },
+
+    {
+      "class": "Tomato___Bacterial_spot",
+      "remedies": {
+        "chemical": ["Copper bactericide"],
+        "organic": ["Neem oil"],
+        "biological": ["Bacillus"],
+        "cultural": ["Avoid overhead watering"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Tomato___Early_blight",
+      "remedies": {
+        "chemical": ["Mancozeb"],
+        "organic": ["Neem oil"],
+        "biological": ["Trichoderma"],
+        "cultural": ["Crop rotation"],
+        "mechanical": ["Remove infected leaves"]
+      }
+    },
+
+    {
+      "class": "Tomato___Late_blight",
+      "remedies": {
+        "chemical": ["Metalaxyl"],
+        "organic": ["Copper spray"],
+        "biological": ["Bacillus"],
+        "cultural": ["Avoid humidity"],
+        "mechanical": ["Remove infected plants"]
+      }
+    },
+
+    {
+      "class": "Tomato___Leaf_Mold",
+      "remedies": {
+        "chemical": ["Azoxystrobin"],
+        "organic": ["Neem oil"],
+        "biological": ["Bacillus"],
+        "cultural": ["Ventilation"],
+        "mechanical": ["Remove leaves"]
+      }
+    },
+
+    {
+      "class": "Tomato___Septoria_leaf_spot",
+      "remedies": {
+        "chemical": ["Chlorothalonil"],
+        "organic": ["Neem oil"],
+        "biological": ["Trichoderma"],
+        "cultural": ["Crop rotation"],
+        "mechanical": ["Remove leaves"]
+      }
+    },
+
+    {
+      "class": "Tomato___Spider_mites",
+      "remedies": {
+        "chemical": ["Abamectin"],
+        "organic": ["Neem oil"],
+        "biological": ["Predatory mites"],
+        "cultural": ["Increase humidity"],
+        "mechanical": ["Spray water on leaves"]
+      }
+    },
+
+    {
+      "class": "Tomato___Target_Spot",
+      "remedies": {
+        "chemical": ["Chlorothalonil"],
+        "organic": ["Neem oil"],
+        "biological": ["Bacillus"],
+        "cultural": ["Spacing"],
+        "mechanical": ["Remove leaves"]
+      }
+    },
+
+    {
+      "class": "Tomato___Yellow_Leaf_Curl_Virus",
+      "remedies": {
+        "chemical": ["Imidacloprid"],
+        "organic": ["Neem oil"],
+        "biological": ["Ladybugs"],
+        "cultural": ["Control whiteflies"],
+        "mechanical": ["Remove plants"]
+      }
+    },
+
+    {
+      "class": "Tomato___Mosaic_virus",
+      "remedies": {
+        "chemical": ["No cure"],
+        "organic": ["Neem oil prevention"],
+        "biological": ["Biocontrol agents"],
+        "cultural": ["Use resistant seeds"],
+        "mechanical": ["Remove infected plants"]
+      }
+    },
+
+    {
+      "class": "Tomato___Healthy",
+      "remedies": {
+        "chemical": ["None"],
+        "organic": ["Compost"],
+        "biological": ["Biofertilizer"],
+        "cultural": ["Proper watering"],
+        "mechanical": ["Monitoring"]
+      }
+    }
+
+  ]
+}
