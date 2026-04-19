@@ -22,6 +22,7 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
   String? _matchedRemedyClass;
   Map<String, List<String>>? _matchedRemedies;
   String? _error;
+  List<MapEntry<String, double>>? _topPredictions;
   bool _loadingModel = false;
   bool _running = false;
   Interpreter? _interpreter;
@@ -254,19 +255,46 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
       _interpreter!.run(input, output);
 
       final scores = output.first;
+      debugPrint('[Disease] Raw scores (first 5): ${scores.take(5).toList()}');
+      debugPrint('[Disease] Labels count: ${_labels.length}');
+
+      // Apply softmax normalization to convert logits to probabilities
+      final maxScore = scores.reduce((a, b) => a > b ? a : b);
+      final normalizedScores = scores.map((s) => s - maxScore).toList();
+      final expScores = normalizedScores.map((s) => (s as num).exp().toDouble()).toList();
+      final sumExp = expScores.reduce((a, b) => a + b);
+      final softmaxScores = expScores.map((e) => e / sumExp).toList();
+
       int maxIdx = 0;
-      double maxScore = scores[0];
-      for (int i = 1; i < scores.length; i++) {
-        if (scores[i] > maxScore) {
-          maxScore = scores[i];
+      double confidenceScore = softmaxScores[0];
+      for (int i = 1; i < softmaxScores.length; i++) {
+        if (softmaxScores[i] > confidenceScore) {
+          confidenceScore = softmaxScores[i];
           maxIdx = i;
         }
       }
+
+      // Get top 5 predictions
+      final predictions = <MapEntry<String, double>>[];
+      for (int i = 0; i < softmaxScores.length; i++) {
+        predictions.add(MapEntry(
+          _labels.isNotEmpty && i < _labels.length ? _labels[i] : 'Class $i',
+          softmaxScores[i],
+        ));
+      }
+      predictions.sort((a, b) => b.value.compareTo(a.value));
+      final top5 = predictions.take(5).toList();
+      debugPrint('[Disease] Top 5 predictions:');
+      for (var p in top5) {
+        debugPrint('  ${p.key}: ${(p.value * 100).toStringAsFixed(2)}%');
+      }
+
       final predictedLabel = _labels.isNotEmpty && maxIdx < _labels.length ? _labels[maxIdx] : 'Class $maxIdx';
       final matched = _matchRemedies(predictedLabel);
       setState(() {
         _predictedLabel = predictedLabel;
-        _confidence = maxScore;
+        _confidence = confidenceScore;
+        _topPredictions = top5;
         _matchedRemedyClass = matched?.key;
         _matchedRemedies = matched?.value;
         _error = null;
@@ -372,6 +400,24 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
                     const SizedBox(height: 16),
                     Text('Prediction: $_predictedLabel', style: const TextStyle(fontWeight: FontWeight.w700)),
                     if (_confidence != null) Text('Confidence: ${(_confidence! * 100).toStringAsFixed(1)}%'),
+                    if (_topPredictions != null && _topPredictions!.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      const Text('Top 5 predictions:', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+                      const SizedBox(height: 6),
+                      ..._topPredictions!.map((pred) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(pred.key, style: const TextStyle(fontSize: 11)),
+                              flex: 2,
+                            ),
+                            Text('${(pred.value * 100).toStringAsFixed(1)}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      )),
+                    ],
                     if (_matchedRemedies == null) ...[
                       const SizedBox(height: 8),
                       const Text('No matching remedy found in remedieses.json for this disease.'),
