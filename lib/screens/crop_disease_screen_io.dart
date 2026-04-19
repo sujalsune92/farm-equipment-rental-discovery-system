@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:image/image.dart' as img;
@@ -261,7 +262,7 @@ class _CropDiseaseScreenState extends State<CropDiseaseScreen> {
       // Apply softmax normalization to convert logits to probabilities
       final maxScore = scores.reduce((a, b) => a > b ? a : b);
       final normalizedScores = scores.map((s) => s - maxScore).toList();
-      final expScores = normalizedScores.map((s) => (s as num).exp().toDouble()).toList();
+      final expScores = normalizedScores.map((s) => math.exp(s)).toList();
       final sumExp = expScores.reduce((a, b) => a + b);
       final softmaxScores = expScores.map((e) => e / sumExp).toList();
 
